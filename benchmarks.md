@@ -19,3 +19,15 @@
 |-----------|---------|-----------|---------------|------------|-------|
 | MutexQueue| 2       | 33.0      | 47.6          | 12.8M      | Baseline contention. |
 | SPSCQueue | 2       | 3.61      | 6.98          | 134.2M     | Lock-free SPSC. ~6.8x faster CPU time, 10x throughput. |
+
+## Experiment 2: Lock-Free Stack (CAS Contention)
+* **Architecture:** Node-based LIFO using `std::atomic_compare_exchange_weak` on a single `head_` pointer.
+
+| Threads | Time (ns) | CPU Time (ns) | Iterations | Notes |
+|---------|-----------|---------------|------------|-------|
+| 1       | 35.1      | 35.6          | 22.4M      | Baseline CAS overhead. Slower than uncontended mutex. |
+| 2       | 42.6      | 82.0          | 8.9M       | Immediate performance drop. |
+| 8       | 86.8      | 742.0         | 800K       | Heavy cache invalidation begins. |
+| 16      | 82.1      | 1247.0        | 551K       | "Busy-waiting" collapse. 2.2x slower than Mutex. |
+
+**Conclusion:** Lock-free does not mean wait-free. Under severe single-point contention, threads aggressively spinning in a CAS loop cause catastrophic L1 cache invalidation across the CPU (cache line ping-ponging). In this specific scenario, sleeping via an OS Mutex is actually more efficient than busy-waiting.
