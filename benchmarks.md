@@ -1,7 +1,6 @@
 # Hermes Engine Benchmarks
 
 ## Baseline: MutexQueue (Release Mode)
-* **Date:** 2026-04-01
 * **Specs:** 16 Cores, 3686 MHz CPU
 
 | Threads | Time (ns) | CPU Time (ns) | Notes |
