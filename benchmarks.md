@@ -12,3 +12,11 @@
 | 8       | 48.9      | 174.0         | Heavy context switching begins. |
 | 14      | 56.6      | 376.0         | Severe OS intervention. |
 | 16      | 57.3      | 562.0         | Max hardware concurrency; 32x slower than baseline. |
+
+## Optimization 1: Lock-Free SPSC Ring Buffer
+* **Architecture:** Fixed-size `std::vector` with `std::atomic<size_t>` indices. Used `acquire/release` memory semantics and `alignas(64)` cache-line padding to prevent false sharing.
+
+| Benchmark | Threads | Time (ns) | CPU Time (ns) | Iterations | Notes |
+|-----------|---------|-----------|---------------|------------|-------|
+| MutexQueue| 2       | 33.0      | 47.6          | 12.8M      | Baseline contention. |
+| SPSCQueue | 2       | 3.61      | 6.98          | 134.2M     | Lock-free SPSC. ~6.8x faster CPU time, 10x throughput. |
