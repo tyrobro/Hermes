@@ -30,3 +30,6 @@ target_include_directories(test_affinity PRIVATE src)
 
 add_executable(test_engine benchmarks/test_engine.cpp)
 target_include_directories(test_engine PRIVATE src)
+
+add_executable(historical_parser benchmarks/historical_parser.cpp)
+target_include_directories(historical_parser PRIVATE src)
