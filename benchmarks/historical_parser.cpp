@@ -91,6 +91,8 @@ int main(int argc, char *argv[])
     std::cout << "[Backtest] End of file reached. Shutting down...\n";
     engine->stop();
 
+    engine->print_pnl_summary();
+
     double throughput = (ticks_processed / elapsed.count()) / 1000000.0;
 
     std::cout << "----------------------------------------\n";

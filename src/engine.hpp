@@ -47,12 +47,35 @@ namespace hermes
 
         uint32_t imbalance_ratio = 3;
 
+        int32_t inventory = 0;
+        int64_t cash_cents = 0;
+        uint64_t total_shares_traded = 0;
+
+        const int32_t MAX_POSITION = 1000;
+
     public:
         void set_imbalance_ratio(uint32_t ratio)
         {
             if (ratio < 2)
                 ratio = 2;
             imbalance_ratio = ratio;
+        }
+
+        void print_pnl_summary()
+        {
+            double gross_pnl = cash_cents / 100.0;
+            double fees = (total_shares_traded * 0.003);
+            double net_pnl = gross_pnl - fees;
+
+            std::cout << "\n========================================\n";
+            std::cout << "          END OF RUN PnL REPORT         \n";
+            std::cout << "========================================\n";
+            std::cout << "Final Inventory : " << inventory << " shares\n";
+            std::cout << "Shares Traded   : " << total_shares_traded << "\n";
+            std::cout << "Gross PnL       : $" << gross_pnl << "\n";
+            std::cout << "Trading Fees    : $" << fees << "\n";
+            std::cout << "Net PnL         : $" << net_pnl << "\n";
+            std::cout << "========================================\n\n";
         }
 
     private:
@@ -74,7 +97,6 @@ namespace hermes
                 if (rx_to_strategy_queue.pop(tick))
                 {
                     uint32_t price_tick = static_cast<uint32_t>(tick.price * 100);
-
                     books[tick.instrument_id].update_level(tick.side, price_tick, tick.volume);
 
                     uint32_t best_bid = books[tick.instrument_id].get_best_bid();
@@ -85,6 +107,21 @@ namespace hermes
 
                     if (bid_vol > 0 && (bid_vol * imbalance_ratio < ask_vol))
                     {
+                        if (inventory > -MAX_POSITION)
+                        {
+                            uint32_t trade_qty = 100;
+
+                            inventory -= trade_qty;
+                            cash_cents += (best_bid * trade_qty);
+                            total_shares_traded += trade_qty;
+
+                            Order order{0, tick.instrument_id, (best_bid / 100.00), trade_qty, 1};
+                            while (!strategy_to_tx_queue.push(order))
+                            {
+                            }
+
+                            std::cout << "[EXECUTION] SELL " << trade_qty << " shares @ $" << (best_bid / 100.0) << " | Pos: " << inventory << " | Cash: $" << (cash_cents / 100.0) << "\n";
+                        }
                     }
                 }
             }
@@ -93,7 +130,6 @@ namespace hermes
         void tx_loop()
         {
             pin_current_thread(TX_CORE);
-            std::cout << "[Tx] Thread locked to core " << get_current_core() << "\n";
             Order order;
             while (running.load(std::memory_order_relaxed))
             {
@@ -116,7 +152,6 @@ namespace hermes
             rx_thread = std::thread(&TradingEngine::rx_loop, this);
             strategy_thread = std::thread(&TradingEngine::strategy_loop, this);
             tx_thread = std::thread(&TradingEngine::tx_loop, this);
-            std::cout << "[Engine] High-Frequency Pipeline Initialized.\n";
         }
 
         void stop()
