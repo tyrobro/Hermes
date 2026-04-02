@@ -26,5 +26,7 @@ target_include_directories(bench_queue PRIVATE src)
 target_link_libraries(bench_queue PRIVATE benchmark::benchmark benchmark::benchmark_main Threads::Threads)
 
 add_executable(test_affinity benchmarks/test_affinity.cpp)
-
 target_include_directories(test_affinity PRIVATE src)
+
+add_executable(test_engine benchmarks/test_engine.cpp)
+target_include_directories(test_engine PRIVATE src)
