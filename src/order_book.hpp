@@ -22,6 +22,7 @@ namespace hermes
         {
             if (price_tick >= MAX_PRICE_LEVELS)
                 return;
+
             if (side == 0)
             {
                 bid_volumes[price_tick] = volume;
@@ -60,6 +61,21 @@ namespace hermes
         inline uint32_t get_best_ask() const
         {
             return best_ask;
+        }
+
+        inline uint32_t get_volume_at_price(uint8_t side, uint32_t price_tick) const
+        {
+            if (price_tick >= MAX_PRICE_LEVELS)
+                return 0;
+
+            if (side == 0)
+            {
+                return bid_volumes[price_tick];
+            }
+            else
+            {
+                return ask_volumes[price_tick];
+            }
         }
     };
 }

@@ -9,7 +9,6 @@
 
 namespace hermes
 {
-
     struct alignas(64) Tick
     {
         uint64_t timestamp;
@@ -34,7 +33,7 @@ namespace hermes
         SPSCOptimisedQueue<Tick, 1048576> rx_to_strategy_queue;
         SPSCOptimisedQueue<Order, 1048576> strategy_to_tx_queue;
 
-        OrderBook order_book;
+        OrderBook books[10];
 
         std::thread rx_thread;
         std::thread strategy_thread;
@@ -46,10 +45,21 @@ namespace hermes
         const int STRATEGY_CORE = 4;
         const int TX_CORE = 6;
 
+        uint32_t imbalance_ratio = 3;
+
+    public:
+        void set_imbalance_ratio(uint32_t ratio)
+        {
+            if (ratio < 2)
+                ratio = 2;
+            imbalance_ratio = ratio;
+        }
+
+    private:
         void rx_loop()
         {
             pin_current_thread(RX_CORE);
-            while (running.load(memory_order_relaxed))
+            while (running.load(std::memory_order_relaxed))
             {
             }
         }
@@ -58,20 +68,23 @@ namespace hermes
         {
             pin_current_thread(STRATEGY_CORE);
             Tick tick;
-            uint32_t last_best_bid = 0;
 
             while (running.load(std::memory_order_relaxed))
             {
                 if (rx_to_strategy_queue.pop(tick))
                 {
                     uint32_t price_tick = static_cast<uint32_t>(tick.price * 100);
-                    order_book.update_level(tick.side, price_tick, tick.volume);
 
-                    uint32_t current_best_bid = order_book.get_best_bid();
-                    if (current_best_bid != last_best_bid && current_best_bid != 0)
+                    books[tick.instrument_id].update_level(tick.side, price_tick, tick.volume);
+
+                    uint32_t best_bid = books[tick.instrument_id].get_best_bid();
+                    uint32_t best_ask = books[tick.instrument_id].get_best_ask();
+
+                    uint32_t bid_vol = books[tick.instrument_id].get_volume_at_price(0, best_bid);
+                    uint32_t ask_vol = books[tick.instrument_id].get_volume_at_price(1, best_ask);
+
+                    if (bid_vol > 0 && (bid_vol * imbalance_ratio < ask_vol))
                     {
-                        std::cout << "[Strategy] New Best Bid: $" << (current_best_bid / 100.0) << " (Vol: " << tick.volume << ")\n";
-                        last_best_bid = current_best_bid;
                     }
                 }
             }
@@ -80,7 +93,7 @@ namespace hermes
         void tx_loop()
         {
             pin_current_thread(TX_CORE);
-            cout << "[Tx] Thread locked to core " << get_current_core() << "\n";
+            std::cout << "[Tx] Thread locked to core " << get_current_core() << "\n";
             Order order;
             while (running.load(std::memory_order_relaxed))
             {
@@ -100,10 +113,10 @@ namespace hermes
         void start()
         {
             running.store(true, std::memory_order_release);
-            rx_thread = thread(&TradingEngine::rx_loop, this);
-            strategy_thread = thread(&TradingEngine::strategy_loop, this);
-            tx_thread = thread(&TradingEngine::tx_loop, this);
-            cout << "[Engine] High-Frequency Pipeline Initialized.\n";
+            rx_thread = std::thread(&TradingEngine::rx_loop, this);
+            strategy_thread = std::thread(&TradingEngine::strategy_loop, this);
+            tx_thread = std::thread(&TradingEngine::tx_loop, this);
+            std::cout << "[Engine] High-Frequency Pipeline Initialized.\n";
         }
 
         void stop()
