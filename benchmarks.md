@@ -42,4 +42,17 @@
 | 8       | 18.6      | 146.0         | 12.5M      | Scaling linearly with core count. |
 | 16      | 1.82      | 26.4          | 133.8M     | Massive win; possible cache/batching effect. |
 
-**Final Ingestion Conclusion:** The MPMC Ring Buffer is the undisputed winner. At 16 threads, the CPU time (**26.4 ns**) is **~23x faster** than the MutexQueue (616 ns) and **~45x faster** than the Lock-Free Stack (1197 ns). By distributing contention across the buffer slots using sequence numbers, we effectively eliminated the cache-line bouncing that caused the stack-based implementation to collapse under heavy load.
+**Conclusion:** The MPMC Ring Buffer is the undisputed winner. At 16 threads, the CPU time (**26.4 ns**) is **~23x faster** than the MutexQueue (616 ns) and **~45x faster** than the Lock-Free Stack (1197 ns). By distributing contention across the buffer slots using sequence numbers, we effectively eliminated the cache-line bouncing that caused the stack-based implementation to collapse under heavy load.
+## Optimization 3: SPSC Pipeline (Hardware Sympathy)
+
+* **Architecture:** Wait-free Single-Producer Single-Consumer (SPSC) queue engineered for zero false-sharing.
+
+| Implementation | Threads | Time (ns) | CPU Time (ns) | Iterations | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Standard SPSC** | 2 | 4.15 | 8.29 | 118.7M | Baseline lock-free implementation. |
+| **Optimized SPSC** | 2 | **0.936** | **1.84** | 373.3M | 128-byte aligned with remote index caching. |
+
+**Analysis & Inference:**
+The optimized SPSC achieved a **~4.5x reduction** in CPU time over the baseline. By isolating the Producer and Consumer state structs with 128-byte alignment, we entirely eliminated false sharing and bypassed aggressive hardware prefetcher overlaps. Furthermore, implementing local thread-caching for the remote indices (head/tail) minimized atomic loads, drastically reducing MESI cache-invalidation traffic across the L3 cache. 
+
+**Conclusion:** At sub-nanosecond wall-time latency, this architecture is strictly optimal for the Hermes critical path (Rx Thread -> Strategy Thread -> Tx Thread).

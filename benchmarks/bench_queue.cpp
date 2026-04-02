@@ -4,6 +4,7 @@
 #include "SPSCQueue.hpp"
 #include "LockFreeStack.hpp"
 #include "MPMCQueue.hpp"
+#include "SPSCOmptimisedQueue.hpp"
 
 static void BM_MutexQueue_Contention(benchmark::State &state)
 {
@@ -81,3 +82,27 @@ static void BM_MPMCQueue_Contention(benchmark::State &state)
     }
 }
 BENCHMARK(BM_MPMCQueue_Contention)->Threads(1)->Threads(2)->Threads(4)->Threads(8)->Threads(14)->Threads(16);
+
+static hermes::SPSCOptimisedQueue<int, 1048576> opt_spsc_queue;
+static void BM_SPSCOptimisedQueue_Contention(benchmark::State &state)
+{
+    for (auto _ : state)
+    {
+        if (state.thread_index() == 0)
+        {
+            while (!opt_spsc_queue.push(42))
+            {
+                benchmark::DoNotOptimize(42);
+            }
+        }
+        else
+        {
+            int item;
+            while (!opt_spsc_queue.pop(item))
+            {
+                benchmark::DoNotOptimize(item);
+            }
+        }
+    }
+}
+BENCHMARK(BM_SPSCOptimisedQueue_Contention)->Threads(2);
