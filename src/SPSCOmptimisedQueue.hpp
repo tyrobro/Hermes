@@ -2,86 +2,82 @@
 
 #include <atomic>
 #include <cstddef>
-#include <type_traits>
+#include <array>
+#include <stdexcept>
 
-using namespace std;
 namespace hermes
 {
+
     template <typename T, size_t Capacity>
     class SPSCOptimisedQueue
     {
         static_assert(Capacity && ((Capacity & (Capacity - 1)) == 0), "Capacity must be a power of 2");
 
-        static constexpr size_t Mask = Capacity - 1;
+    private:
+        std::array<T, Capacity> buffer;
 
-        static constexpr size_t CacheLineSize = 128;
+        alignas(64) std::atomic<size_t> write_idx{0};
+        alignas(64) std::atomic<size_t> read_idx{0};
 
-        struct alignas(CacheLineSize) ProducerState
-        {
-            atomic<size_t> tail{0};
-            size_t head_cache{0};
-        };
+        alignas(64) size_t cached_read_idx{0};
+        alignas(64) size_t cached_write_idx{0};
 
-        struct alignas(CacheLineSize) ConsumerState
-        {
-            atomic<size_t> head{0};
-            size_t tail_cache{0};
-        };
-
-        alignas(CacheLineSize) ProducerState producer_;
-        alignas(CacheLineSize) ConsumerState consumer_;
-        alignas(CacheLineSize) T buffer_[Capacity];
+        static constexpr size_t MASK = Capacity - 1;
 
     public:
         SPSCOptimisedQueue() = default;
-        ~SPSCOptimisedQueue() = default;
 
-        SPSCOptimisedQueue(const SPSCOptimisedQueue &) = delete;
-        SPSCOptimisedQueue &operator=(const SPSCOptimisedQueue &) = delete;
-        SPSCOptimisedQueue(SPSCOptimisedQueue &&) = delete;
-        SPSCOptimisedQueue &operator=(SPSCOptimisedQueue &&) = delete;
-
-        template <typename... Args>
-        bool emplace(Args &&...args)
+        bool push(const T &item)
         {
-            const size_t current_tail = producer_.tail.load(memory_order_relaxed);
+            const size_t current_write = write_idx.load(std::memory_order_relaxed);
 
-            if (current_tail - producer_.head_cache == Capacity)
+            if (current_write - cached_read_idx == Capacity)
             {
-                producer_.head_cache = consumer_.head.load(memory_order_acquire);
-
-                if (current_tail - producer_.head_cache == Capacity)
+                cached_read_idx = read_idx.load(std::memory_order_acquire);
+                if (current_write - cached_read_idx == Capacity)
                 {
                     return false;
                 }
             }
 
-            new (&buffer_[current_tail & Mask]) T(forward<Args>(args)...);
-            producer_.tail.store(current_tail + 1, memory_order_release);
-            return true;
-        }
+            buffer[current_write & MASK] = item;
 
-        bool push(const T &item)
-        {
-            return emplace(item);
+            write_idx.store(current_write + 1, std::memory_order_release);
+            return true;
         }
 
         bool pop(T &item)
         {
-            const size_t current_head = consumer_.head.load(memory_order_relaxed);
+            const size_t current_read = read_idx.load(std::memory_order_relaxed);
 
-            if (current_head == consumer_.tail_cache)
+            if (current_read == cached_write_idx)
             {
-                consumer_.tail_cache = producer_.tail.load(memory_order_acquire);
-                if (current_head == consumer_.tail_cache)
+                cached_write_idx = write_idx.load(std::memory_order_acquire);
+                if (current_read == cached_write_idx)
                 {
                     return false;
                 }
             }
 
-            item = move(buffer_[current_head & Mask]);
-            consumer_.head.store(current_head + 1, memory_order_release);
+            item = buffer[current_read & MASK];
+
+            read_idx.store(current_read + 1, std::memory_order_release);
             return true;
+        }
+
+    public:
+        static void verify_cache_alignment()
+        {
+            SPSCOptimisedQueue<T, Capacity> dummy;
+            size_t write_addr = reinterpret_cast<size_t>(&dummy.write_idx);
+            size_t read_addr = reinterpret_cast<size_t>(&dummy.read_idx);
+
+            size_t diff = (write_addr > read_addr) ? (write_addr - read_addr) : (read_addr - write_addr);
+
+            if (diff < 64)
+            {
+                throw std::runtime_error("FATAL: False Sharing detected! Atomics share a cache line.");
+            }
         }
     };
 

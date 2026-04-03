@@ -36,3 +36,9 @@ target_include_directories(historical_parser PRIVATE src)
 
 add_executable(ram_benchmark benchmarks/ram_benchmark.cpp)
 target_include_directories(ram_benchmark PRIVATE src)
+
+add_executable(test_queue benchmarks/test_queue.cpp)
+target_include_directories(test_queue PRIVATE src)
+
+add_executable(latency_benchmark benchmarks/latency_benchmark.cpp)
+target_include_directories(latency_benchmark PRIVATE src)
