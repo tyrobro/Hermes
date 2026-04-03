@@ -11,17 +11,17 @@ In cycle-accurate benchmarks, the engine achieves a median (p50) one-way pipelin
 The engine implements a decoupled, three-stage pipeline. Each stage is isolated to a dedicated physical CPU core to eliminate OS context-switching jitter. Inter-stage communication is handled exclusively via Single-Producer Single-Consumer (SPSC) lock-free ring buffers, ensuring the hot path contains no blocking operations.
 ```mermaid
 graph TD
-    subgraph CPU Core 2
+    subgraph Core2["CPU Core 2"]
         RX[Rx Thread<br/>Ingestion / Feed Handler]
     end
-    subgraph CPU Core 4
+    subgraph Core4["CPU Core 4"]
         STRAT[Strategy Thread<br/>L2 Order Book & Alpha]
     end
-    subgraph CPU Core 6
+    subgraph Core6["CPU Core 6"]
         TX[Tx Thread<br/>Order Execution / Risk]
     end
-    Q1[[SPSC Queue — alignas(64)]]
-    Q2[[SPSC Queue — alignas(64)]]
+    Q1[[SPSC Queue — cache-line aligned]]
+    Q2[[SPSC Queue — cache-line aligned]]
     RX -- "Tick" --> Q1
     Q1 --> STRAT
     STRAT --> Q2
