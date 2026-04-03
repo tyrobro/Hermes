@@ -42,3 +42,6 @@ target_include_directories(test_queue PRIVATE src)
 
 add_executable(latency_benchmark benchmarks/latency_benchmark.cpp)
 target_include_directories(latency_benchmark PRIVATE src)
+
+add_executable(latency_rdtsc benchmarks/latency_rdtsc.cpp)
+target_include_directories(latency_rdtsc PRIVATE src)
